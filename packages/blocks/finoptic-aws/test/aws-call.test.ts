@@ -24,7 +24,7 @@ const CREDS = {
   accessKeyId: 'ASIATESTKEYID123456',
   secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
   sessionToken: 'FwoGZXIvYXdzEXAMPLETOKEN/with+chars==',
-  region: 'eu-west-1',
+  expiration: '2033-05-18T03:33:20Z',
 };
 
 function ctx(overrides: Record<string, unknown> = {}) {
@@ -51,7 +51,8 @@ function brokerReturns(body: unknown, status = 200) {
 describe('aws_call', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    process.env['FINOPTIC_BROKER_URL'] = 'http://broker.test/creds';
+    process.env['FINOPTIC_BACKEND_URL'] = 'http://broker.test';
+    process.env['AWS_REGION'] = 'eu-west-1';
     process.env['FINOPTIC_BROKER_SECRET'] = 'broker-shared-secret';
   });
 
@@ -68,11 +69,11 @@ describe('aws_call', () => {
       Reservations: [{ Instances: [{ InstanceId: 'i-1' }] }],
     });
     const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
-    expect(url).toBe('http://broker.test/creds');
-    expect(init.headers.authorization).toBe('Bearer broker-shared-secret');
+    expect(String(url)).toBe('http://broker.test/internal/broker/resolve');
+    expect(init.headers['X-Broker-Secret']).toBe('broker-shared-secret');
     expect(JSON.parse(init.body)).toEqual({
       executionId: 'exec-1',
-      credentialHandle: 'handle-1',
+      handle: 'handle-1',
     });
     expect(clientCtor).toHaveBeenCalledWith(
       expect.objectContaining({ region: 'eu-west-1' }),
@@ -129,9 +130,9 @@ describe('aws_call', () => {
   });
 
   test('fails closed when the broker env is missing', async () => {
-    delete process.env['FINOPTIC_BROKER_URL'];
+    delete process.env['FINOPTIC_BACKEND_URL'];
     global.fetch = jest.fn() as any;
-    await expect(awsCall.run(ctx())).rejects.toThrow(/FINOPTIC_BROKER_URL/);
+    await expect(awsCall.run(ctx())).rejects.toThrow(/FINOPTIC_BACKEND_URL/);
     expect(global.fetch).not.toHaveBeenCalled();
   });
 

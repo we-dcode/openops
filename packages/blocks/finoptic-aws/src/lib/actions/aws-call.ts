@@ -87,11 +87,7 @@ export const awsCall = createAction({
     let client: any;
     try {
       creds = await fetchCredentials(executionId, credentialHandle);
-      known = [
-        creds.accessKeyId,
-        creds.secretAccessKey,
-        creds.sessionToken ?? '',
-      ];
+      known = [creds.accessKeyId, creds.secretAccessKey, creds.sessionToken];
 
       const sdk = loadSdk(service);
       const clientName = Object.keys(sdk).find(
@@ -105,7 +101,8 @@ export const awsCall = createAction({
 
       const Client = sdk[clientName] as AnyCtor;
       client = new Client({
-        region: creds.region ?? process.env['AWS_REGION'] ?? 'us-east-1',
+        // The broker sends no region: the worker's AWS_REGION decides.
+        region: process.env['AWS_REGION'] ?? 'us-east-1',
         credentials: {
           accessKeyId: creds.accessKeyId,
           secretAccessKey: creds.secretAccessKey,
