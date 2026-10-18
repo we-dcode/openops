@@ -29,6 +29,10 @@
       "@openops/block-asana": ["packages/blocks/asana/src/index.ts"],
       "@openops/block-assemblyai": ["packages/blocks/assemblyai/src/index.ts"],
       "@openops/block-aws": ["packages/blocks/aws/src/index.ts"],
+      "@finoptic/block-aws": ["packages/blocks/finoptic-aws/src/index.ts"],
+      "@finoptic/block-approval": [
+        "packages/blocks/finoptic-approval/src/index.ts"
+      ],
       "@openops/block-aws-athena": ["packages/blocks/aws-athena/src/index.ts"],
       "@openops/block-aws-compute-optimizer": [
         "packages/blocks/aws-compute-optimizer/src/index.ts"

@@ -1,0 +1,34 @@
+{
+  "secretHeader": "X-Broker-Secret",
+  "resolve": {
+    "path": "/internal/broker/resolve",
+    "request": {
+      "executionId": "exec-1",
+      "handle": "dGhpcy1pcy1hLXRlc3QtaGFuZGxlLW5vdC1yZWFsISE"
+    },
+    "response": {
+      "accessKeyId": "ASIAEXAMPLEKEYID1234",
+      "secretAccessKey": "example-secret-access-key-material",
+      "sessionToken": "example-session-token-material",
+      "expiration": "2033-05-18T03:33:20Z"
+    }
+  },
+  "approvalCreate": {
+    "path": "/internal/automations/approvals",
+    "request": {
+      "executionId": "exec-1",
+      "flowId": "flow-1",
+      "flowRunId": "run-1",
+      "summary": "Stop idle EC2 instances",
+      "approveUrl": "http://openops.internal:3000/v1/flow-runs/run-1/requests/pause-abc?action=approve",
+      "rejectUrl": "http://openops.internal:3000/v1/flow-runs/run-1/requests/pause-abc?action=reject"
+    }
+  },
+  "approvalStatus": {
+    "pathTemplate": "/internal/automations/approvals/{executionId}",
+    "response": {
+      "executionId": "exec-1",
+      "status": "approved"
+    }
+  }
+}
