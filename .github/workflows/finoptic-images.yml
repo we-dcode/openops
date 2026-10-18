@@ -1,0 +1,82 @@
+# Finoptic fork: build the OpenOps app and worker images (with the Finoptic
+# blocks in dist/packages/blocks) and push them to ECR.
+#
+#  - Pull requests: build the blocks and run their tests on a GitHub-hosted
+#    runner. No AWS access, nothing is pushed.
+#  - Tag push finoptic-<version>: build and push on the CodeBuild runner
+#    project finoptic-openops-release (finoptic-infra, codebuild/openops-release.tf).
+#    Only that job holds the role that can write to ECR, so code from a
+#    pull request never runs with it.
+#
+# amd64 only. The EKS nodes that run OpenOps are amd64; building on the arm64
+# Mac laptops produces images that die with "exec format error" there, so the
+# platform is pinned explicitly below.
+name: Finoptic images
+
+on:
+  pull_request:
+    paths:
+      - 'packages/blocks/finoptic-*/**'
+      - '.github/workflows/finoptic-images.yml'
+  push:
+    tags: ['finoptic-*']
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  test-blocks:
+    name: Test Finoptic blocks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: '.nvmrc'
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npx nx run-many --target=test,lint,build --projects=blocks-finoptic-aws,blocks-finoptic-approval
+
+  release-images:
+    name: Build and push images (amd64)
+    if: startsWith(github.ref, 'refs/tags/finoptic-')
+    needs: test-blocks
+    # Large compute, privileged for Docker; 120 min like finoptic-app-release.
+    runs-on: codebuild-finoptic-openops-release-${{ github.run_id }}-${{ github.run_attempt }}
+    env:
+      DOCKER_DEFAULT_PLATFORM: linux/amd64
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: '.nvmrc'
+      - name: Build dist (all projects, includes the Finoptic blocks)
+        run: |
+          npm ci --no-audit --no-fund
+          npm run prepare
+          npx nx run-many --target=build
+      - name: Check the Finoptic blocks are in dist
+        run: |
+          test -f dist/packages/blocks/finoptic-aws/src/index.js
+          test -f dist/packages/blocks/finoptic-approval/src/index.js
+      - name: Log in to ECR
+        run: |
+          REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}"
+          ACCOUNT="$(aws sts get-caller-identity --query Account --output text)"
+          echo "REGISTRY=${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com" >> "$GITHUB_ENV"
+          aws ecr get-login-password --region "$REGION" \
+            | docker login --username AWS --password-stdin "${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com"
+      - name: Build and push
+        run: |
+          VERSION="${GITHUB_REF_NAME#finoptic-}"
+          docker buildx create --use >/dev/null
+          for pair in "Dockerfile:openops-app" "worker.Dockerfile:openops-worker"; do
+            FILE="${pair%%:*}"; REPO="finoptic/${pair##*:}"
+            # Repositories are IMMUTABLE: a version is pushed once.
+            if aws ecr describe-images --repository-name "$REPO" --image-ids imageTag="$VERSION" >/dev/null 2>&1; then
+              echo "::error::$REPO:$VERSION already exists"; exit 1
+            fi
+            docker buildx build --platform linux/amd64 --provenance=false \
+              --build-arg VERSION="$VERSION" \
+              -f "$FILE" -t "$REGISTRY/$REPO:$VERSION" --push .
+          done
